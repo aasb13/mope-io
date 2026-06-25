@@ -1,6 +1,6 @@
 # Mope.io reverse engineered
 
-A simple mope.io client that injects into the websocket. (Most packets were completely reverse engineered)
+A simple mope.io client that injects into the websocket. (Most packets were completely reverse engineered, 64 packets as of now)
 
 ## Overview
 
@@ -68,7 +68,7 @@ python3 run_controller.py
 ## Project Structure
 
 ```
-mopeai/
+mopeio/
 ├── assets/                 # Deobfuscated game source files
 │   └── deobf.js            # Primary reference for packet structure
 ├── controller/             # Python controller logic
@@ -113,3 +113,4 @@ Example: `5_CMovementPacket.js` (ID 5, client-sent, movement data)
 
 - seleniumbase>=4.40,<5
 - python-socketio>=5.12,<6
+
