@@ -1,0 +1,13 @@
+.idea
+.venv
+.selenium-profile
+__pycache__
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+packet_logs*
+*.jsonl
+logs.dump
+downloaded_files/
+userscript.js

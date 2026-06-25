@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MopEngine Debug Console</title>
+  <style>
+    :root {
+      --bg: #111417;
+      --panel: #171b20;
+      --panel-2: #1d232a;
+      --panel-3: #242b33;
+      --border: #2c3540;
+      --text: #edf2f7;
+      --muted: #98a6b5;
+      --dim: #6f7d8c;
+      --accent: #63b3ed;
+      --accent-2: #2c5282;
+      --module: #68d391;
+      --key: #f6e05e;
+      --message: #f6ad55;
+      --danger: #fc8181;
+      --selection: #16324a;
+      --hover: #1e2630;
+      --mono: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+      --sans: "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top right, rgba(99, 179, 237, 0.12), transparent 28%),
+        linear-gradient(180deg, #101317, #0c0f12 45%, #0a0d10);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-rows: 46px 1fr;
+      height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(38, 49, 61, 0.95), rgba(17, 20, 23, 0.95));
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 6px;
+      border-bottom: 2px solid var(--accent);
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .pill {
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-family: var(--mono);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(460px, 1.2fr) minmax(380px, 0.9fr);
+      min-height: 0;
+    }
+
+    .stream,
+    .detail {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 0;
+      background: rgba(18, 22, 27, 0.88);
+      backdrop-filter: blur(10px);
+    }
+
+    .stream {
+      border-right: 1px solid var(--border);
+    }
+
+    .pane-header,
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .pane-header {
+      background: var(--panel-2);
+      font-size: 12px;
+    }
+
+    .toolbar {
+      background: rgba(12, 15, 18, 0.72);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pane-title {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .pane-meta {
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search {
+      width: min(360px, 100%);
+      height: 30px;
+      border: 1px solid #3a4653;
+      border-radius: 6px;
+      padding: 0 10px;
+      background: #0e1318;
+      color: var(--text);
+      font: 12px var(--mono);
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(99, 179, 237, 0.35);
+    }
+
+    .list {
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .empty {
+      padding: 18px 14px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .row {
+      border-bottom: 1px solid rgba(44, 53, 64, 0.75);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+
+    .row:hover {
+      background: var(--hover);
+    }
+
+    .row.active {
+      background: var(--selection);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    .row-top {
+      display: grid;
+      grid-template-columns: 90px 120px 1fr 110px;
+      gap: 10px;
+      align-items: baseline;
+      font: 12px var(--mono);
+    }
+
+    .row-message {
+      margin-top: 6px;
+      color: var(--message);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .timestamp {
+      color: var(--dim);
+    }
+
+    .module {
+      color: var(--module);
+      font-weight: 700;
+    }
+
+    .key {
+      color: var(--key);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .preview {
+      color: var(--muted);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .detail-body {
+      overflow: auto;
+      min-height: 0;
+      background: rgba(10, 13, 16, 0.82);
+    }
+
+    .tabstrip {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .view-tab {
+      border: 1px solid #32404e;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      padding: 4px 10px;
+      font: 11px var(--mono);
+      cursor: pointer;
+    }
+
+    .view-tab.active {
+      border-color: var(--accent);
+      background: rgba(99, 179, 237, 0.16);
+      color: var(--text);
+    }
+
+    .section {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-head {
+      padding: 8px 12px;
+      background: var(--panel-3);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .section-body {
+      padding: 10px 12px 12px;
+      font: 12px/1.55 var(--mono);
+      color: var(--muted);
+    }
+
+    .plaintext {
+      padding: 12px;
+      color: #d7dee7;
+      font: 12px/1.55 var(--mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    @media (max-width: 960px) {
+      .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: 52vh 1fr;
+      }
+
+      .stream {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .row-top {
+        grid-template-columns: 80px 100px 1fr;
+      }
+
+      .preview {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="tab">Debug Stream</div>
+      <div class="pill" id="count">0 logs</div>
+      <div class="pill" id="status">connecting</div>
+      <div class="pill">transport: socket.io</div>
+    </div>
+    <div class="workspace">
+      <section class="stream">
+        <div class="pane-header">
+          <div class="pane-title">Userscript Debug Feed</div>
+          <div class="pane-meta">Live browser bridge</div>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <input id="search" class="search" type="search" placeholder="Search module, key, message, details, or timestamp">
+          </div>
+          <div class="toolbar-right">
+            <span id="filter-meta">showing all</span>
+          </div>
+        </div>
+        <div id="list" class="list">
+          <div class="empty">Waiting for debug logs...</div>
+        </div>
+      </section>
+      <section class="detail">
+        <div class="pane-header">
+          <div class="pane-title">Inspector</div>
+          <div class="pane-meta" id="selection-meta">No selection</div>
+        </div>
+        <div class="toolbar">
+          <div class="tabstrip">
+            <button id="tab-inspector" class="view-tab active" type="button">Inspector</button>
+            <button id="tab-plaintext" class="view-tab" type="button">Plaintext</button>
+          </div>
+          <span id="detail-hint">Click a log row to inspect structured details.</span>
+        </div>
+        <div id="detail-body" class="detail-body">
+          <div class="empty">No log selected.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <script>
+    const MAX_ENTRIES = 5000;
+
+    const state = {
+      entries: [],
+      filtered: [],
+      selectedId: null,
+      nextId: 0,
+      search: "",
+      detailView: "inspector",
+      selectionLocked: false,
+      pendingRender: false,
+    };
+
+    const listEl = document.getElementById("list");
+    const detailBodyEl = document.getElementById("detail-body");
+    const countEl = document.getElementById("count");
+    const statusEl = document.getElementById("status");
+    const filterMetaEl = document.getElementById("filter-meta");
+    const selectionMetaEl = document.getElementById("selection-meta");
+    const searchEl = document.getElementById("search");
+    const detailHintEl = document.getElementById("detail-hint");
+    const tabInspectorEl = document.getElementById("tab-inspector");
+    const tabPlaintextEl = document.getElementById("tab-plaintext");
+
+    function formatTime(timestamp) {
+      if (!timestamp) {
+        return "";
+      }
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) {
+        return String(timestamp);
+      }
+      return date.toLocaleTimeString();
+    }
+
+    function safeStringify(value) {
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (error) {
+        return JSON.stringify({ error: String(error) }, null, 2);
+      }
+    }
+
+    function formatPlaintextEntry(entry) {
+      const lines = [
+        `[${(entry.timestamp || "").slice(0, 23)}] [${entry.module || "Unknown"}] [${entry.key || ""}] ${entry.message || ""}`,
+      ];
+
+      if (entry.details && Object.keys(entry.details).length) {
+        const detailsText = safeStringify(entry.details);
+        for (const line of detailsText.split("\n")) {
+          lines.push(`  ${line}`);
+        }
+      }
+
+      return lines.join("\n");
+    }
+
+    function renderDetailTabs() {
+      const inspectorActive = state.detailView === "inspector";
+      tabInspectorEl.classList.toggle("active", inspectorActive);
+      tabPlaintextEl.classList.toggle("active", !inspectorActive);
+      detailHintEl.textContent = inspectorActive
+        ? "Click a log row to inspect structured details."
+        : "Filtered logs rendered in plain text, matching the old debug window style.";
+    }
+
+    function buildSearchText(entry) {
+      return [
+        entry.timestamp,
+        entry.module,
+        entry.key,
+        entry.message,
+        safeStringify(entry.details),
+      ].join("\n").toLowerCase();
+    }
+
+    function appendEntries(entries) {
+      for (const raw of entries) {
+        const entry = {
+          id: state.nextId++,
+          timestamp: raw && raw.timestamp ? raw.timestamp : "",
+          module: raw && raw.module ? raw.module : "Unknown",
+          key: raw && raw.key ? raw.key : "",
+          message: raw && raw.message ? raw.message : "",
+          details: raw && typeof raw.details === "object" && raw.details !== null ? raw.details : {},
+        };
+        entry.searchText = buildSearchText(entry);
+        state.entries.push(entry);
+      }
+
+      if (state.entries.length > MAX_ENTRIES) {
+        state.entries = state.entries.slice(state.entries.length - MAX_ENTRIES);
+      }
+
+      if (!state.entries.some((entry) => entry.id === state.selectedId)) {
+        state.selectedId = state.entries.length ? state.entries[state.entries.length - 1].id : null;
+      }
+
+      applyFilter();
+    }
+
+    function renderAll() {
+      renderList();
+      renderDetail();
+      countEl.textContent = `${state.entries.length} logs`;
+      filterMetaEl.textContent = state.search.trim()
+        ? `${state.filtered.length} matching`
+        : "showing all";
+      state.pendingRender = false;
+    }
+
+    function applyFilter() {
+      const term = state.search.trim().toLowerCase();
+      state.filtered = term
+        ? state.entries.filter((entry) => entry.searchText.includes(term))
+        : state.entries.slice();
+
+      if (!state.filtered.some((entry) => entry.id === state.selectedId)) {
+        state.selectedId = state.filtered.length ? state.filtered[state.filtered.length - 1].id : null;
+      }
+
+      if (state.selectionLocked) {
+        state.pendingRender = true;
+        return;
+      }
+
+      renderAll();
+    }
+
+    function renderList() {
+      if (!state.filtered.length) {
+        listEl.innerHTML = '<div class="empty">No debug logs match the current filter.</div>';
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (const entry of state.filtered) {
+        const row = document.createElement("div");
+        row.className = `row${entry.id === state.selectedId ? " active" : ""}`;
+        row.dataset.id = String(entry.id);
+
+        const preview = Object.keys(entry.details).length
+          ? `${Object.keys(entry.details).length} detail field${Object.keys(entry.details).length === 1 ? "" : "s"}`
+          : "no details";
+
+        row.innerHTML = `
+          <div class="row-top">
+            <span class="timestamp">${formatTime(entry.timestamp)}</span>
+            <span class="module">${escapeHtml(entry.module)}</span>
+            <span class="key">${escapeHtml(entry.key)}</span>
+            <span class="preview">${escapeHtml(preview)}</span>
+          </div>
+          <div class="row-message">${escapeHtml(entry.message || "(empty message)")}</div>
+        `;
+
+        row.addEventListener("click", () => {
+          state.selectedId = entry.id;
+          renderList();
+          renderDetail();
+        });
+
+        fragment.appendChild(row);
+      }
+
+      const shouldStick = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 40;
+      listEl.innerHTML = "";
+      listEl.appendChild(fragment);
+      if (shouldStick) {
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+    }
+
+    function renderDetail() {
+      renderDetailTabs();
+
+      if (state.detailView === "plaintext") {
+        if (!state.filtered.length) {
+          selectionMetaEl.textContent = "Plaintext";
+          detailBodyEl.innerHTML = '<div class="empty">No debug logs match the current filter.</div>';
+          return;
+        }
+
+        selectionMetaEl.textContent = `Plaintext / ${state.filtered.length} logs`;
+        detailBodyEl.innerHTML = `
+          <div class="plaintext">${escapeHtml(state.filtered.map(formatPlaintextEntry).join("\n\n"))}</div>
+        `;
+        return;
+      }
+
+      const entry = state.filtered.find((item) => item.id === state.selectedId)
+        || state.entries.find((item) => item.id === state.selectedId)
+        || null;
+
+      if (!entry) {
+        selectionMetaEl.textContent = "No selection";
+        detailBodyEl.innerHTML = '<div class="empty">No log selected.</div>';
+        return;
+      }
+
+      selectionMetaEl.textContent = `${entry.module} / ${entry.key || "no-key"}`;
+      detailBodyEl.innerHTML = `
+        <section class="section">
+          <div class="section-head">Summary</div>
+          <div class="section-body">
+            <pre>${escapeHtml(safeStringify({
+              timestamp: entry.timestamp,
+              module: entry.module,
+              key: entry.key,
+              message: entry.message,
+            }))}</pre>
+          </div>
+        </section>
+        <section class="section">
+          <div class="section-head">Details</div>
+          <div class="section-body">
+            <pre>${escapeHtml(safeStringify(entry.details))}</pre>
+          </div>
+        </section>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    searchEl.addEventListener("input", (event) => {
+      state.search = event.target.value || "";
+      applyFilter();
+    });
+
+    document.addEventListener("selectionchange", () => {
+      const selection = document.getSelection();
+      const hasTextSelection = Boolean(selection && !selection.isCollapsed && String(selection).length > 0);
+      if (hasTextSelection === state.selectionLocked) {
+        return;
+      }
+
+      state.selectionLocked = hasTextSelection;
+      if (!state.selectionLocked && state.pendingRender) {
+        renderAll();
+      }
+    });
+
+    tabInspectorEl.addEventListener("click", () => {
+      state.detailView = "inspector";
+      renderDetail();
+    });
+
+    tabPlaintextEl.addEventListener("click", () => {
+      state.detailView = "plaintext";
+      renderDetail();
+    });
+
+    const socket = io({
+      transports: ["polling"],
+      upgrade: false,
+    });
+
+    socket.on("connect", () => {
+      statusEl.textContent = "connected";
+    });
+
+    socket.on("disconnect", () => {
+      statusEl.textContent = "disconnected";
+    });
+
+    socket.on("snapshot", (entries) => {
+      state.entries = [];
+      state.filtered = [];
+      state.selectedId = null;
+      state.nextId = 0;
+      appendEntries(Array.isArray(entries) ? entries : []);
+    });
+
+    socket.on("logs", (entries) => {
+      appendEntries(Array.isArray(entries) ? entries : []);
+    });
+  </script>
+</body>
+</html>

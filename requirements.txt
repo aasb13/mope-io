@@ -1,0 +1,2 @@
+seleniumbase>=4.40,<5
+python-socketio>=5.12,<6

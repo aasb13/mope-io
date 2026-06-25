@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MopEngine Packet Console</title>
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --panel: #202124;
+      --panel-2: #252526;
+      --panel-3: #2d2d30;
+      --border: #34373c;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --dim: #7f858d;
+      --blue: #8ab4f8;
+      --blue-2: #1f6feb;
+      --green: #7ee787;
+      --orange: #f2a65a;
+      --red: #ff7b72;
+      --string: #9ecbff;
+      --number: #79c0ff;
+      --boolean: #ffa657;
+      --null: #8b949e;
+      --selection: #16395f;
+      --hover: #262a31;
+      --mono: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+      --sans: "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-rows: 42px 1fr;
+      height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      background: linear-gradient(180deg, #2b2b2b, #232323);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 6px;
+      border-bottom: 2px solid var(--blue);
+      color: var(--text);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .pill {
+      padding: 2px 7px;
+      border: 1px solid #4c4f54;
+      border-radius: 999px;
+      font-family: var(--mono);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(480px, 1.15fr) minmax(420px, 1fr);
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .console-pane,
+    .inspector-pane {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 0;
+      background: var(--panel);
+    }
+
+    .console-pane {
+      border-right: 1px solid var(--border);
+    }
+
+    .pane-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-2);
+      font-size: 12px;
+    }
+
+    .pane-title {
+      color: var(--text);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .pane-meta {
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .search {
+      width: min(360px, 100%);
+      height: 28px;
+      border: 1px solid #42464d;
+      border-radius: 6px;
+      background: #1a1b1e;
+      color: var(--text);
+      font: 12px var(--mono);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 1px rgba(138, 180, 248, 0.35);
+    }
+
+    .console-list {
+      overflow: auto;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0)),
+        var(--bg);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      position: relative;
+      contain: strict;
+      overscroll-behavior: contain;
+    }
+
+    .console-viewport {
+      position: relative;
+      min-height: 100%;
+    }
+
+    .console-row {
+      position: absolute;
+      left: 0;
+      right: 0;
+      border: 0;
+      border-bottom: 1px solid #2a2d31;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 0;
+      cursor: pointer;
+      display: block;
+    }
+
+    .console-row:hover {
+      background: var(--hover);
+    }
+
+    .console-row.active {
+      background: var(--selection);
+      box-shadow: inset 2px 0 0 var(--blue);
+    }
+
+    .console-row-inner {
+      display: grid;
+      grid-template-columns: 18px 62px 1fr 90px;
+      align-items: start;
+      gap: 8px;
+      padding: 8px 12px;
+      height: 35px;
+    }
+
+    .twisty {
+      color: var(--dim);
+      user-select: none;
+    }
+
+    .kind {
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .kind.RECV {
+      color: var(--green);
+    }
+
+    .kind.SENT {
+      color: var(--orange);
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: baseline;
+      overflow: hidden;
+    }
+
+    .packet-id {
+      color: var(--blue);
+    }
+
+    .packet-label {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .packet-preview {
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .timestamp {
+      color: var(--dim);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .empty {
+      padding: 18px 14px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .inspector-body {
+      overflow: auto;
+      background: #1b1c1f;
+    }
+
+    .section {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border-bottom: 1px solid #2b2e33;
+    }
+
+    .section-body {
+      padding: 6px 0;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 12px;
+      padding: 4px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .key {
+      color: #c9d1d9;
+    }
+
+    .value {
+      color: var(--muted);
+      word-break: break-word;
+    }
+
+    .tree {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 4px 0 8px;
+    }
+
+    .tree-node {
+      display: block;
+    }
+
+    .tree-line {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 2px 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tree-line.expandable {
+      cursor: pointer;
+    }
+
+    .tree-node[data-depth="1"] .tree-line { padding-left: 28px; }
+    .tree-node[data-depth="2"] .tree-line { padding-left: 44px; }
+    .tree-node[data-depth="3"] .tree-line { padding-left: 60px; }
+    .tree-node[data-depth="4"] .tree-line { padding-left: 76px; }
+    .tree-node[data-depth="5"] .tree-line { padding-left: 92px; }
+    .tree-node[data-depth="6"] .tree-line { padding-left: 108px; }
+    .tree-node[data-depth="7"] .tree-line { padding-left: 124px; }
+    .tree-node[data-depth="8"] .tree-line { padding-left: 140px; }
+
+    .tree-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--dim);
+      padding: 0;
+      width: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .tree-spacer {
+      display: inline-block;
+      width: 12px;
+      color: transparent;
+      user-select: none;
+    }
+
+    .tree-prop {
+      color: #c9d1d9;
+    }
+
+    .tree-string {
+      color: var(--string);
+    }
+
+    .tree-number {
+      color: var(--number);
+    }
+
+    .tree-boolean {
+      color: var(--boolean);
+    }
+
+    .tree-null {
+      color: var(--null);
+    }
+
+    .tree-summary {
+      color: var(--muted);
+    }
+
+    .tree-children[hidden] {
+      display: none;
+    }
+
+    .hexdump {
+      padding: 8px 12px 12px;
+      margin: 0;
+      color: #c5d1dc;
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: 48vh 1fr;
+      }
+
+      .console-pane {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .console-row-inner {
+        grid-template-columns: 18px 58px 1fr;
+      }
+
+      .timestamp {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="tab">Console</div>
+      <div class="pill" id="count">0 packets</div>
+      <div class="pill" id="status">connecting</div>
+      <div class="pill">source: packet_logs.jsonl</div>
+    </div>
+    <div class="workspace">
+      <section class="console-pane">
+        <div class="pane-header">
+          <div class="pane-title">Packet Stream</div>
+          <div class="pane-meta">Live feed</div>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <input id="search" class="search" type="search" placeholder="Search any text in packets, parsed data, errors, timestamps, or hexdump">
+          </div>
+          <div class="toolbar-right">
+            <span id="filter-meta">showing all</span>
+          </div>
+        </div>
+        <div id="console-list" class="console-list">
+          <div id="console-viewport" class="console-viewport">
+            <div class="empty">Waiting for packets...</div>
+          </div>
+        </div>
+      </section>
+      <section class="inspector-pane">
+        <div class="pane-header">
+          <div class="pane-title">Object Inspector</div>
+          <div class="pane-meta" id="selection-meta">No selection</div>
+        </div>
+        <div class="toolbar">
+          <span>Click a console row to inspect its parsed object and hexdump</span>
+        </div>
+        <div id="inspector-body" class="inspector-body">
+          <div class="empty">No packet selected.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <script>
+    const MAX_ENTRIES = 5000;
+    const ROW_HEIGHT = 36;
+    const ROW_OVERSCAN = 20;
+
+    const state = {
+      entries: [],
+      entryMap: new Map(),
+      selected: null,
+      renderedDetail: null,
+      expanded: new Set(["parsed-root"]),
+      search: "",
+      nextEntryId: 0,
+      filteredEntries: [],
+      filterCacheKey: "",
+      rowPool: [],
+      rowByEntryId: new Map(),
+      renderHandle: 0,
+      consoleDirty: true,
+      inspectorDirty: true,
+      ingestHandle: 0,
+      pendingIncomingEntries: [],
+    };
+
+    function entryByIndex(idx) {
+      return state.entryMap.get(idx) || null;
+    }
+
+    function formatTime(timestamp) {
+      if (!timestamp) {
+        return "";
+      }
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) {
+        return timestamp;
+      }
+      return date.toLocaleTimeString();
+    }
+
+    function previewValue(value) {
+      if (value === null) {
+        return "null";
+      }
+      if (typeof value === "string") {
+        return value.length > 80 ? `"${value.slice(0, 77)}..."` : `"${value}"`;
+      }
+      if (typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+      }
+      if (Array.isArray(value)) {
+        return `Array(${value.length})`;
+      }
+      if (typeof value === "object") {
+        const keys = Object.keys(value);
+        return keys.length ? `{${keys.slice(0, 4).join(", ")}${keys.length > 4 ? ", ..." : ""}}` : "{}";
+      }
+      if (typeof value === "undefined") {
+        return "undefined";
+      }
+      return String(value);
+    }
+
+    function buildSearchText(entry) {
+      return JSON.stringify({
+        timestamp: entry.timestamp || "",
+        direction: entry.direction || "",
+        header: entry.header ?? "",
+        label: entry.label || "",
+        length: entry.length ?? "",
+        parsingError: entry.parsingError || "",
+        parsed: entry.parsed ?? null,
+        hexdump: entry.hexdump || "",
+      }).toLowerCase();
+    }
+
+    function getSearchText(entry) {
+      if (typeof entry.__searchText !== "string") {
+        entry.__searchText = buildSearchText(entry);
+      }
+      return entry.__searchText;
+    }
+
+    function invalidateFilterCache() {
+      state.filterCacheKey = "";
+    }
+
+    function trimEntries() {
+      const overflow = Math.max(0, state.entries.length - MAX_ENTRIES);
+      if (!overflow) {
+        return;
+      }
+
+      const removed = state.entries.splice(0, overflow);
+      for (const entry of removed) {
+        state.entryMap.delete(entry.__idx);
+      }
+
+      if (state.selected !== null && !state.entryMap.has(state.selected)) {
+        state.selected = state.entries.length ? state.entries[state.entries.length - 1].__idx : null;
+        state.renderedDetail = null;
+        state.inspectorDirty = true;
+      }
+
+      invalidateFilterCache();
+    }
+
+    function assignEntryIds(entries) {
+      for (const entry of entries) {
+        if (typeof entry.__idx !== "number") {
+          entry.__idx = state.nextEntryId;
+        }
+        state.nextEntryId = Math.max(state.nextEntryId, entry.__idx + 1);
+        entry.__preview = previewValue(entry.parsed);
+        entry.__displayTime = formatTime(entry.timestamp);
+        state.entries.push(entry);
+        state.entryMap.set(entry.__idx, entry);
+      }
+
+      trimEntries();
+      invalidateFilterCache();
+    }
+
+    function getFilteredEntries() {
+      const query = state.search.trim().toLowerCase();
+      const cacheKey = `${state.entries.length}:${state.nextEntryId}:${query}`;
+      if (state.filterCacheKey === cacheKey) {
+        return state.filteredEntries;
+      }
+
+      state.filterCacheKey = cacheKey;
+      state.filteredEntries = query
+        ? state.entries.filter((entry) => getSearchText(entry).includes(query))
+        : state.entries;
+      return state.filteredEntries;
+    }
+
+    function stringifyPrimitive(value) {
+      if (typeof value === "string") {
+        return `<span class="tree-string">"${escapeHtml(value)}"</span>`;
+      }
+      if (typeof value === "number") {
+        return `<span class="tree-number">${value}</span>`;
+      }
+      if (typeof value === "boolean") {
+        return `<span class="tree-boolean">${value}</span>`;
+      }
+      if (value === null || typeof value === "undefined") {
+        return `<span class="tree-null">${value === null ? "null" : "undefined"}</span>`;
+      }
+      return `<span class="tree-string">${escapeHtml(String(value))}</span>`;
+    }
+
+    function summaryForNode(value) {
+      if (Array.isArray(value)) {
+        return `Array(${value.length})`;
+      }
+      const keys = Object.keys(value);
+      return keys.length ? `{${keys.slice(0, 4).join(", ")}${keys.length > 4 ? ", ..." : ""}}` : "{}";
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function renderTreeNode(prop, value, path, depth) {
+      const propHtml = prop === null ? "" : `<span class="tree-prop">${escapeHtml(prop)}:</span>`;
+
+      if (value === null || typeof value !== "object") {
+        return `
+        <div class="tree-node" data-depth="${depth}">
+          <div class="tree-line">
+            <span class="tree-spacer">•</span>
+            ${propHtml}
+            ${stringifyPrimitive(value)}
+          </div>
+        </div>
+        `;
+      }
+
+      const isArray = Array.isArray(value);
+      const children = isArray
+        ? value.map((child, index) => renderTreeNode(String(index), child, `${path}.${index}`, depth + 1)).join("")
+        : Object.entries(value).map(([key, child]) => renderTreeNode(key, child, `${path}.${key}`, depth + 1)).join("");
+      const expanded = state.expanded.has(path);
+
+      return `
+        <div class="tree-node" data-depth="${depth}">
+          <div class="tree-line expandable" data-path="${escapeHtml(path)}">
+            <button class="tree-toggle" type="button" data-path="${escapeHtml(path)}">${expanded ? "▾" : "▸"}</button>
+            ${propHtml}
+            <span class="tree-summary">${escapeHtml(summaryForNode(value))}</span>
+          </div>
+          <div class="tree-children" ${expanded ? "" : "hidden"}>
+            ${children}
+          </div>
+        </div>
+      `;
+    }
+
+    function createEmptyNode(message) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = message;
+      return empty;
+    }
+
+    function createConsoleRow() {
+      const button = document.createElement("button");
+      button.className = "console-row";
+      button.type = "button";
+      button.innerHTML = `
+        <div class="console-row-inner">
+          <span class="twisty">▸</span>
+          <span class="kind"></span>
+          <span class="summary">
+            <span class="packet-id"></span>
+            <span class="packet-label"></span>
+            <span class="packet-preview"></span>
+          </span>
+          <span class="timestamp"></span>
+        </div>
+      `;
+      button._kind = button.querySelector(".kind");
+      button._packetId = button.querySelector(".packet-id");
+      button._packetLabel = button.querySelector(".packet-label");
+      button._packetPreview = button.querySelector(".packet-preview");
+      button._timestamp = button.querySelector(".timestamp");
+      return button;
+    }
+
+    function acquireRow() {
+      return state.rowPool.pop() || createConsoleRow();
+    }
+
+    function releaseRows() {
+      for (const [, row] of state.rowByEntryId) {
+        row.remove();
+        state.rowPool.push(row);
+      }
+      state.rowByEntryId.clear();
+    }
+
+    function bindRow(row, entry, displayIndex) {
+      row.dataset.select = String(entry.__idx);
+      row.style.top = `${displayIndex * ROW_HEIGHT}px`;
+      row.classList.toggle("active", state.selected === entry.__idx);
+      row._kind.className = `kind ${entry.direction || ""}`.trim();
+      row._kind.textContent = entry.direction || "?";
+      row._packetId.textContent = `ID:${entry.header ?? "?"}`;
+      row._packetLabel.textContent = entry.label || "UNKNOWN";
+      row._packetPreview.textContent = entry.__preview;
+      row._timestamp.textContent = entry.__displayTime;
+    }
+
+    function updateConsoleMeta(filteredEntries) {
+      const count = document.getElementById("count");
+      const filterMeta = document.getElementById("filter-meta");
+      count.textContent = `${state.entries.length} packet${state.entries.length === 1 ? "" : "s"}`;
+      filterMeta.textContent = state.search.trim()
+        ? `${filteredEntries.length} / ${state.entries.length} shown`
+        : "showing all";
+    }
+
+    function renderConsole() {
+      const list = document.getElementById("console-list");
+      const viewport = document.getElementById("console-viewport");
+      const filteredEntries = getFilteredEntries();
+      updateConsoleMeta(filteredEntries);
+
+      if (!filteredEntries.length) {
+        releaseRows();
+        viewport.style.height = "";
+        viewport.replaceChildren(createEmptyNode(
+          state.entries.length ? "No packets match the current filter." : "Waiting for packets..."
+        ));
+        return;
+      }
+
+      const totalRows = filteredEntries.length;
+      const visibleHeight = list.clientHeight || ROW_HEIGHT;
+      const start = Math.max(0, Math.floor(list.scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
+      const end = Math.min(
+        totalRows,
+        Math.ceil((list.scrollTop + visibleHeight) / ROW_HEIGHT) + ROW_OVERSCAN
+      );
+
+      const nextVisible = new Map();
+      const fragment = document.createDocumentFragment();
+
+      for (let displayIndex = start; displayIndex < end; displayIndex += 1) {
+        const entry = filteredEntries[totalRows - 1 - displayIndex];
+        let row = state.rowByEntryId.get(entry.__idx);
+        if (row) {
+          state.rowByEntryId.delete(entry.__idx);
+        } else {
+          row = acquireRow();
+        }
+
+        bindRow(row, entry, displayIndex);
+        nextVisible.set(entry.__idx, row);
+        fragment.appendChild(row);
+      }
+
+      for (const [, row] of state.rowByEntryId) {
+        row.remove();
+        state.rowPool.push(row);
+      }
+
+      state.rowByEntryId = nextVisible;
+      viewport.style.height = `${totalRows * ROW_HEIGHT}px`;
+      viewport.replaceChildren(fragment);
+    }
+
+    function renderInspector() {
+      const body = document.getElementById("inspector-body");
+      const meta = document.getElementById("selection-meta");
+      const entry = entryByIndex(state.selected) || state.entries[state.entries.length - 1] || null;
+
+      if (!entry) {
+        state.renderedDetail = null;
+        meta.textContent = "No selection";
+        body.innerHTML = `<div class="empty">No packet selected.</div>`;
+        return;
+      }
+
+      state.selected = entry.__idx;
+      if (state.renderedDetail === entry.__idx) {
+        return;
+      }
+
+      state.renderedDetail = entry.__idx;
+      meta.textContent = `${entry.direction} ID:${entry.header} ${entry.label || ""}`;
+      body.innerHTML = `
+        <section class="section">
+          <div class="section-head">Packet</div>
+          <div class="section-body">
+            <div class="kv"><div class="key">timestamp</div><div class="value">${escapeHtml(entry.timestamp || "")}</div></div>
+            <div class="kv"><div class="key">direction</div><div class="value">${escapeHtml(entry.direction || "")}</div></div>
+            <div class="kv"><div class="key">header</div><div class="value">${escapeHtml(entry.header ?? "")}</div></div>
+            <div class="kv"><div class="key">label</div><div class="value">${escapeHtml(entry.label || "")}</div></div>
+            <div class="kv"><div class="key">length</div><div class="value">${escapeHtml(entry.length ?? "")}</div></div>
+            <div class="kv"><div class="key">parsingError</div><div class="value">${escapeHtml(entry.parsingError || "")}</div></div>
+          </div>
+        </section>
+        <section class="section">
+          <div class="section-head">Parsed Object</div>
+          <div class="tree">
+            ${renderTreeNode(null, entry.parsed, "parsed-root", 0)}
+          </div>
+        </section>
+        <section class="section">
+          <div class="section-head">Hexdump</div>
+          <pre class="hexdump">${escapeHtml(entry.hexdump || "")}</pre>
+        </section>
+      `;
+    }
+
+    function scheduleRender({ console = false, inspector = false } = {}) {
+      state.consoleDirty = state.consoleDirty || console;
+      state.inspectorDirty = state.inspectorDirty || inspector;
+
+      if (state.renderHandle) {
+        return;
+      }
+
+      state.renderHandle = requestAnimationFrame(() => {
+        state.renderHandle = 0;
+        if (state.consoleDirty) {
+          state.consoleDirty = false;
+          renderConsole();
+        }
+        if (state.inspectorDirty) {
+          state.inspectorDirty = false;
+          renderInspector();
+        }
+      });
+    }
+
+    function ensureSelection() {
+      if (state.selected !== null && state.entryMap.has(state.selected)) {
+        return;
+      }
+      if (state.entries.length) {
+        state.selected = state.entries[state.entries.length - 1].__idx;
+        state.renderedDetail = null;
+        state.inspectorDirty = true;
+      }
+    }
+
+    function flushPendingEntries() {
+      state.ingestHandle = 0;
+      if (!state.pendingIncomingEntries.length) {
+        return;
+      }
+
+      const list = document.getElementById("console-list");
+      const query = state.search.trim();
+      const pinnedToTop = list.scrollTop <= 8;
+      const beforeLength = query ? getFilteredEntries().length : 0;
+      const pending = state.pendingIncomingEntries.splice(0, state.pendingIncomingEntries.length);
+
+      assignEntryIds(pending);
+      ensureSelection();
+      document.getElementById("status").textContent = `live ${new Date().toLocaleTimeString()}`;
+
+      if (!query && !pinnedToTop) {
+        list.scrollTop += pending.length * ROW_HEIGHT;
+      } else if (query) {
+        const afterLength = getFilteredEntries().length;
+        list.scrollTop += Math.max(0, afterLength - beforeLength) * ROW_HEIGHT;
+      }
+
+      scheduleRender({ console: true, inspector: state.renderedDetail !== state.selected });
+    }
+
+    function queueIncomingEntries(entries) {
+      if (!entries.length) {
+        return;
+      }
+
+      state.pendingIncomingEntries.push(...entries);
+      if (state.ingestHandle) {
+        return;
+      }
+
+      state.ingestHandle = requestAnimationFrame(flushPendingEntries);
+    }
+
+    function attachSocket() {
+      const socket = io({
+        transports: ["polling"],
+        upgrade: false,
+      });
+
+      socket.on("connect", () => {
+        document.getElementById("status").textContent = `live ${new Date().toLocaleTimeString()}`;
+      });
+
+      socket.on("disconnect", () => {
+        document.getElementById("status").textContent = "disconnected";
+      });
+
+      socket.on("snapshot", (entries) => {
+        if (state.ingestHandle) {
+          cancelAnimationFrame(state.ingestHandle);
+          state.ingestHandle = 0;
+        }
+        state.pendingIncomingEntries.length = 0;
+        state.entries = [];
+        state.entryMap.clear();
+        releaseRows();
+        state.selected = null;
+        state.renderedDetail = null;
+        state.nextEntryId = 0;
+        invalidateFilterCache();
+        assignEntryIds(entries);
+        ensureSelection();
+        scheduleRender({ console: true, inspector: true });
+      });
+
+      socket.on("packets", (entries) => {
+        queueIncomingEntries(entries);
+      });
+    }
+
+    document.addEventListener("pointerdown", (event) => {
+      const selectButton = event.target.closest("[data-select]");
+      if (selectButton) {
+        event.preventDefault();
+        state.selected = Number(selectButton.dataset.select);
+        state.renderedDetail = null;
+        scheduleRender({ console: true, inspector: true });
+        return;
+      }
+
+      const toggleTarget = event.target.closest("[data-path]");
+      if (toggleTarget && toggleTarget.closest(".tree-line.expandable")) {
+        event.preventDefault();
+        const path = toggleTarget.dataset.path;
+        if (state.expanded.has(path)) {
+          state.expanded.delete(path);
+        } else {
+          state.expanded.add(path);
+        }
+        state.renderedDetail = null;
+        scheduleRender({ inspector: true });
+      }
+    });
+
+    document.getElementById("search").addEventListener("input", (event) => {
+      state.search = event.target.value;
+      invalidateFilterCache();
+      scheduleRender({ console: true, inspector: true });
+    });
+
+    document.getElementById("console-list").addEventListener("scroll", () => {
+      scheduleRender({ console: true });
+    }, { passive: true });
+
+    attachSocket();
+  </script>
+</body>
+</html>

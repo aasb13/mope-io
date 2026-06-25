@@ -1,0 +1,1 @@
+class ModuleEnableEvent extends ModuleEvent {}
